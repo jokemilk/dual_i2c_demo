@@ -1,9 +1,8 @@
 //包含所需头文件
 #include <avr/io.h>
 #include <avr/interrupt.h>
-#include <avr/signal.h>
-
-
+#include <util/delay.h>
+#include <avr/wdt.h> 
 
 
 /*------宏定义------*/
@@ -26,6 +25,8 @@ void port_init(void)
 	DDRC  = 0x00;
 	PORTD = 0x00;
 	DDRD  = 0x00;
+	PORTG = 0x00;
+	DDRG = 0x00 | BIT(0) | BIT(1) | BIT(2) | BIT(3) | BIT(4);
 }
 
 
@@ -68,7 +69,7 @@ void init_devices(void)
 	cli(); //禁止所有中断
 	MCUCR  = 0x00;
 	MCUCSR = 0x80;//禁止JTAG
-	GICR   = 0x00;
+//	GICR   = 0x00;
 	port_init();
 	timer0_init();
 	watchdog_init();
