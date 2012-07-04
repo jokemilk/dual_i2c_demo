@@ -19,10 +19,10 @@
 void port_init(void)
 {
 	PORTB = 0x00;
-	DDRB  = 0x00|BIT(0);
+	DDRB  = 0x00|BIT(0)|BIT(2)|BIT(3);
 	PORTC = 0x00;
 	DDRC  = 0x00;
-	PORTD = 0x00;
+	PORTD = 0x00|BIT(1);
 	DDRD  = 0x00;
 }
 
@@ -46,6 +46,70 @@ void timer0_init(void)
 
 }
 
+//SPI初始化
+void spi_init(void)
+{
+	//spi初始化
+	SPCR = 0x54;
+	SPSR = 0x01;
+}
+
+//功能:使用SPI发送一个字节
+void spi_write(uchar sData)
+{
+	SPDR = sData;
+	while(!(SPSR & BIT(SPIF)));
+	//sData=SPDR;//读从机发回来的数据
+}
+
+
+//功能:使用SPI接收一个字节
+uchar spi_read(void)
+{
+	SPDR = 0x00;
+	while(!(SPSR & BIT(SPIF)));
+	return SPDR;
+}
+
+void write(unsigned int temp)
+{
+	unsigned char SB = 0;
+/////////////////////////////////////////////////
+	PORTB &= ~(BIT(2));
+	SB = (char)((temp>>10)&0xff);
+	spi_write(SB);
+	SB = (char)((temp>>2)&0xff); 
+	spi_write(SB);
+
+	SB = (char)((temp<<6)&0xff); 
+	spi_write(SB);
+	PORTB ^= BIT(2);
+/////////////////////////////////////////////////
+}
+
+void adc_init(void)
+{
+	//adc转换初始化
+	ADCSRA	= 0x00;	//禁止AD转换
+	ADMUX	= 0x00;
+    DIDR0 &=~BIT(0);
+	ACSR	= 0x80; //禁止模拟比较器
+	ADCSRA	= 0x84;
+}
+
+
+unsigned int adc_calc(void)
+{
+	//计算实际电压
+	unsigned long value=0;
+	unsigned int voltage=0; //电压单位为(mV)
+	ADCSRA|=_BV(ADSC);
+	while(ADCSRA&_BV(ADSC));
+	value=ADCL;		 //首先读低位
+	value|=(int)ADCH << 8; //然后读高位
+	voltage=(value*2560)>>10;
+	return voltage;
+}
 
 //T0比较中断服务程序
 //#pragma interrupt_handler timer0_comp_isr:11
@@ -337,6 +401,20 @@ SIGNAL(SIG_2WIRE_SERIAL)
     }
 }
 
+//外中断初始化
+void int_init(void)
+{
+//config PD2...PD7 to pin change interrput
+	PCICR |=(1<<PCIF2);
+	PCMSK2 |=0xFC;
+}
+
+
+//pin int handler
+SIGNAL(SIG_PIN_CHANGE2)
+{
+
+}
 
 void init_devices(void)
 {
@@ -347,6 +425,12 @@ void init_devices(void)
 	port_init();
 	timer0_init();
 	watchdog_init();
+//initial the i2c interface address : 0x4a
+	TWI_Slave_Initialise(0x4a<<1);
+//pin change interrput
+	int_init();
+//adc 
+	adc_init();
 	sei();//开全局中断
 }
 //主函数
@@ -354,8 +438,6 @@ int main(void)
 {
 	init_devices();
 	//在这继续添加你的代码
-	TWI_Slave_Initialise(0x4a<<1);
-	TWI_Start_Transceiver();
 	while(1)
 	{
 	 NOP();
