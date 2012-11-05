@@ -1,0 +1,203 @@
+#include "AD7367.h"
+#include <avr/io.h>
+#include <util/delay.h>
+#include "macro.h"
+
+extern unsigned int	Vw;
+extern unsigned int	Vr;
+extern unsigned int	Vi;
+extern unsigned int	Ad;
+
+extern void delay(int ms);
+
+void AD_getdata(unsigned char num) //
+{
+	int i;
+	unsigned char CK;
+	switch(num)
+	{
+		case	0:	{	
+							Vw = 0;
+							PORTG |=BIT(3);
+							PORTB |=BIT(2)|BIT(4);
+							PORTB &=~BIT(3);
+							_delay_us(20);
+							PORTB |=BIT(3);
+							while((PINB&BIT(7))!=0);
+							_delay_us(5);
+							PORTB &=~BIT(2);
+							for(i=0;i<14;i++)
+							{
+								Vw = Vw<<1;
+								_delay_us(10);
+								PORTB &=~BIT(4);
+								_delay_us(5);
+								if((PINB&BIT(6))!=0)
+									Vw++;	
+								_delay_us(5);
+								PORTB |=BIT(4);
+							}
+							_delay_us(5);
+							PORTB |=BIT(2);
+					}
+					break;
+		case	1:	{
+						PORTG |=BIT(3);
+						PORTB &=~BIT(3); 
+						delay(0);
+						delay(0);
+						delay(0);
+						delay(0);
+						PORTB |=BIT(3);
+						delay(0);
+						PORTB &=~BIT(3);
+						Vw = 0;
+						delay(0);
+						PORTB &=~BIT(2);
+						delay(0);
+						for(i=0;i<13;i++)
+						{
+							PORTB &=~BIT(4);
+							delay(0);
+							if((PINB&BIT(5))!=0)
+								Vw++;
+							Vw=Vw<<1;
+							PORTB |=BIT(4);
+							delay(0);
+						}
+						PORTB &=~BIT(4);
+						if(PINB&BIT(5))
+							Vw++;
+						delay(0);
+						PORTB |=BIT(4);
+					}
+					break;
+		case	2:	{
+						PORTG |=~BIT(3);
+						PORTB &=~BIT(3);
+						Vw = 0;
+						while((PINB&BIT(7))!=0);
+						delay(0);
+						PORTB &=~BIT(2);
+						for(i=0;i<14;i++)
+						{
+//							Vw=Vw<<1;
+							PORTB &=~BIT(4);
+							delay(0);
+							CK = (PINB&BIT(6));
+							delay(0);
+							while((PINB&BIT(6))!=CK)
+							{
+								CK = (PINB&BIT(6));
+								delay(0);
+							}
+							if(CK!=0)
+								Vw+=1<<i;
+							PORTB |=BIT(4);
+							delay(0);
+						}
+					}
+					break;
+		case	3:	{
+						PORTG &=~BIT(3);
+						PORTB &=~BIT(3); 
+						delay(0);
+						delay(0);
+						delay(0);
+						delay(0);
+						PORTB |=BIT(3);
+						delay(0);
+						PORTB &=~BIT(3);
+						Vw = 0;
+						delay(0);
+						PORTB &=~BIT(2);
+						delay(0);
+						for(i=0;i<13;i++)
+						{
+							PORTB &=~BIT(4);
+							delay(0);
+							if((PINB&BIT(6))!=0)
+								Vw++;
+							Vw=Vw<<1;
+							PORTB |=BIT(4);
+							delay(0);
+						}
+						PORTB &=~BIT(4);
+						if(PINB&BIT(6))
+							Vw++;
+						delay(0);
+						PORTB |=BIT(4);
+					}
+					break;
+		case	4:	{
+						PORTG &=~BIT(3);
+						PORTB &=~BIT(3); 
+						delay(0);
+						delay(0);
+						delay(0);
+						delay(0);
+						PORTB |=BIT(3);
+						PORTG |=BIT(3);
+						delay(0);
+						PORTB &=~BIT(3);
+						Vw = 0;
+						Vi = 0;
+						delay(0);
+						PORTB &=~BIT(2);
+						delay(0);
+						for(i=0;i<13;i++)
+						{
+							PORTB &=~BIT(4);
+							delay(0);
+							if((PINB&BIT(5))!=0)
+								Vw++;
+							Vw=Vw<<1;
+							if((PINB&BIT(6))!=0)
+								Vi++;
+							Vi=Vi<<1;
+							PORTB |=BIT(4);
+							delay(0);
+						}
+						PORTB &=~BIT(4);
+						if(PINB&BIT(5))
+							Vw++;
+						if(PINB&BIT(6))
+							Vi++;
+						delay(0);
+						PORTB |=BIT(4);
+//////////////////////////////////////////////////////////////////////////////////////////
+						PORTB |=BIT(3);
+						delay(0);
+						PORTB &=~BIT(3);
+						Vr = 0;
+						Ad = 0;
+						delay(0);
+						PORTB &=~BIT(2);
+						delay(0);
+						for(i=0;i<13;i++)
+						{
+							PORTB &=~BIT(4);
+							delay(0);
+							if((PINB&BIT(5))!=0)
+								Vr++;
+							Vw=Vw<<1;
+							if((PINB&BIT(6))!=0)
+								Ad++;
+							Vi=Vi<<1;
+							PORTB |=BIT(4);
+							delay(0);
+						}
+						PORTB &=~BIT(4);
+						if(PINB&BIT(5))
+							Vr++;
+						if(PINB&BIT(6))
+							Ad++;
+						delay(0);
+						PORTB |=BIT(4);
+					}
+					break;
+		default	 :break;
+	}	
+//	PORTB =	PORTB|BIT(3)|BIT(4);
+}
+
