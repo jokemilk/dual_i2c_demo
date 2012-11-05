@@ -12,14 +12,6 @@
 #define NOP()	asm("nop")
 #define WDR() 	asm("wdr")
 
-/*------函数定义------*/
-void twi_start(void);
-void twi_stop(void);
-void twi_to_write(void);
-void twi_to_read(void);
-void twi_send(uchar data);
-void twi_receive(void);
-
 
 //端口初始化
 void port_init(void)
@@ -83,6 +75,7 @@ Remember to enable interrupts from the main application after initializing the T
 void TWI_Master_Initialise(void)
 {
   TWBR = TWI_TWBR;                                  // Set bit rate register (Baudrate). Defined in header file.
+  TWAR = 0x4b<<1;
 // TWSR = TWI_TWPS;                                  // Not used. Driver presumes prescaler to be 00.
   TWDR = 0xFF;                                      // Default content = SDA released.
   TWCR = (1<<TWEN)|                                 // Enable TWI-interface and release TWI pins.
@@ -192,7 +185,10 @@ ISR(TWI_vect)
   
   switch (TWSR)
   {
-    case TWI_START:             // START has been transmitted  
+/////////////////////////////////////////////////////////////////////////////////////////////
+//write
+/////////////////////////////////////////////////////////////////////////////////////////////
+	case TWI_START:             // START has been transmitted  
     case TWI_REP_START:         // Repeated START has been transmitted
       TWI_bufPtr = 0;                                     // Set buffer pointer to the TWI Address location
     case TWI_MTX_ADR_ACK:       // SLA+W has been tramsmitted and ACK received
@@ -213,6 +209,9 @@ ISR(TWI_vect)
                (0<<TWWC);                                 //
       }
       break;
+/////////////////////////////////////////////////////////////////////////////////////////////
+//read
+/////////////////////////////////////////////////////////////////////////////////////////////
     case TWI_MRX_DATA_ACK:      // Data byte has been received and ACK tramsmitted
       TWI_buf[TWI_bufPtr++] = TWDR;
     case TWI_MRX_ADR_ACK:       // SLA+R has been tramsmitted and ACK received
@@ -245,13 +244,18 @@ ISR(TWI_vect)
              (0<<TWWC);                                 //
       break;
     case TWI_MTX_ADR_NACK:      // SLA+W has been tramsmitted and NACK received
-    case TWI_MRX_ADR_NACK:      // SLA+R has been tramsmitted and NACK received    
+    case TWI_MRX_ADR_NACK:      // SLA+R has been tramsmitted and NACK received   
     case TWI_MTX_DATA_NACK:     // Data byte has been tramsmitted and NACK received
+		_delay_ms(10);     
+     TWCR = (1<<TWEN)|                                 // TWI Interface enabled
+             (1<<TWIE)|(1<<TWINT)|                      // Enable TWI Interupt and clear the flag
+             (0<<TWEA)|(1<<TWSTA)|(0<<TWSTO)|           // Initiate a (RE)START condition.
+             (0<<TWWC);                                 //
+      break;    	
 //    case TWI_NO_STATE              // No relevant state information available; TWINT = ?0?
     case TWI_BUS_ERROR:         // Bus error due to an illegal START or STOP condition
     default:     
-      TWI_state = TWSR;                                 // Store TWSR and automatically sets clears noErrors bit.
-                                                        // Reset TWI Interface
+      TWI_state = TWSR;                                 // Store TWSR and automatically sets clears noErrors bit.                                                       // Reset TWI Interface
       TWCR = (1<<TWEN)|                                 // Enable TWI-interface and release TWI pins
              (0<<TWIE)|(0<<TWINT)|                      // Disable Interupt
              (0<<TWEA)|(0<<TWSTA)|(0<<TWSTO)|           // No Signal requests
@@ -268,6 +272,7 @@ void init_devices(void)
 	port_init();
 	timer0_init();
 	watchdog_init();
+	TWI_Master_Initialise();
 
 	sei();//开全局中断
 }
@@ -278,19 +283,18 @@ int main(void)
 
 	init_devices();
 	//在这继续添加你的代码
-TWI_Master_Initialise( );
 	while(1)
 	{
 	 NOP();
-		cnt = 6;
-		send[0] = (0x4A<<1);
+		cnt = 5;
+		send[0] = (0x4A<<1)|1;
 		send[1] = 'h';
 		send[2] = 'e';
 		send[3] = 'l';
 		send[4] = 'l';
 		send[5] = 'o';
 		TWI_Start_Transceiver_With_Data(send,cnt);
-		_delay_ms(100);
+		_delay_ms(500);
 	}
 	return 0;
 }
