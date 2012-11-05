@@ -15,9 +15,10 @@
   TWI Status/Control register definitions
 ****************************************************************************/
 
-#define TWI_BUFFER_SIZE 4      // Reserves memory for the drivers transceiver buffer. 
+#define TWI_BUFFER_SIZE 8      // Reserves memory for the drivers transceiver buffer. 
                                // Set this to the largest message size that will be sent including 
                                // address byte.
+#define TWI_TWBR            0x0C        // TWI Bit rate Register setting.
 
 /****************************************************************************
   Global definitions
