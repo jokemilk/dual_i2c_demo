@@ -11,5 +11,5 @@ void int_init(void)
 	EIMSK |= (1 << INT1); // External Interrupt Request 1 Enable
 */
 	 EICRB = 0xFF; //extended ext ints rising edge for int 4 5 6 7
-	 EIMSK = 0xF0;	//ennable ints
+	 EIMSK |= 1<<INT7;	//ennable ints
 }

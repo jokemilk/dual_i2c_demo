@@ -75,7 +75,7 @@ volatile static char int1_status = 0;
 volatile static char AD_Protext = 0;
 volatile static int liangchen = 5;
 volatile static char flag_hl = 0; //恒流恒压配置状态标志位 0未配置，1配置过了
-static unsigned char jishu = 0;
+//static unsigned char jishu = 0;
 
 static unsigned char btimer = 0; //	0 每秒10次	1 每秒100次
 volatile char flag_po = 0; //电源指示
@@ -769,6 +769,17 @@ ISR(TWI_vect)
              (0<<TWIE)|(1<<TWINT)|                      // Disable TWI Interrupt and clear the flag
              (0<<TWEA)|(0<<TWSTA)|(1<<TWSTO)|           // Initiate a STOP condition.
              (0<<TWWC);                                 //
+ //return the phase;
+		command[0] = head;
+		commandPC[0] = head;
+		commandPC[1] = 9;
+		commandPC[2] = ~commandPC[1];
+		commandPC[3] =TWI_buf[1];
+		commandPC[4] =TWI_buf[2];
+		commandPC[5] =TWI_buf[3];
+		commandPC[6] =TWI_buf[4];
+		commandPC[11] = tail;
+		puts_0((unsigned char *) commandPC, 12); 		
       break;      
     case TWI_ARB_LOST:          // Arbitration lost
       TWCR = (1<<TWEN)|                                 // TWI Interface enabled
@@ -821,53 +832,16 @@ int main()
 		zhiliu(0);
 	}
 	kaiji();
-//				PORTG |= BIT(4);
-	/*	#ifdef _PART_EEPROM_
-	 Vref = flashread(5);
-	 #endif
-	 if(Vref >=0)			//？？？
-	 command[5] = 0;
-	 else
-	 command[5] = 1;
-	 command[0] = head;
-	 command[1] = 9;
-	 command[2] = ~command[1];
-	 command[3] = 6;
-	 command[4] = ~command[3];
-	 if(Vref >=0)
-	 {
-	 command[6] = ((Vref>>8)&0xFF);
-	 command[7] = Vref&0xFF;
-	 }else
-	 {
-	 command[6] = (((-Vref)>>8)&0xFF);
-	 command[7] = (-Vref)&0xFF;
-	 }
-	 command[8] = tail;
-	 puts_1((unsigned char *)command,9);*/
+
 	PORTA &= ~BIT(4);
 	PORTF &= ~BIT(2);
 	while (1)
 	{
-//		if(!flag_po)
-		{
-			my_power();
-//			flag_po = 1;
-		}
+		my_power();
 		if ((PINA & BIT(2)) == 0) //M信号判断
 		{
 			if (btimer == 1 && liangchen < 6)
 			{
-				liangchen++;
-				huandang(liangchen);
-				jishu = 10;
-				_delay_ms(200);
-				commandPC[0] = head;
-				commandPC[1] = 3;
-				commandPC[2] = ~commandPC[1];
-				commandPC[3] = (unsigned char) liangchen;
-				commandPC[11] = tail;
-				puts_0((unsigned char *) commandPC, 12);
 			}
 			if (intx_status++ < 10)
 				_delay_ms(25);
@@ -875,16 +849,6 @@ int main()
 			{
 				if (liangchen < 6)
 				{
-					liangchen++;
-					huandang(liangchen);
-					jishu = 10;
-					_delay_ms(500);
-					commandPC[0] = head;
-					commandPC[1] = 3;
-					commandPC[2] = ~commandPC[1];
-					commandPC[3] = (unsigned char) liangchen;
-					commandPC[11] = tail;
-					puts_0((unsigned char *) commandPC, 12);
 				}
 				else
 				{
@@ -917,45 +881,6 @@ int main()
 				//	jiazai();
 			}
 		}
-
-		/*		if(AD_Protext==1)//超载
-		 {
-		 //PORTG |=BIT(4);
-		 if(intx_status++ < 20)
-		 _delay_ms(10);
-		 if(intx_status == 21)
-		 {
-		 //亮红灯
-		 PORTG |= BIT(4);
-		 //还原标志
-		 intx_status = 0;
-		 AD_Protext = 0;
-		 //卸载
-		 PORTG &=~BIT(0);
-		 xiezai();
-		 //关ad
-		 STOP_TIMER1;
-		 _delay_ms(10);
-		 //设定系统状态
-		 system_status = 1;
-		 commandPC[0] = head;
-		 commandPC[1] = 1;
-		 commandPC[2] = ~commandPC[1];
-		 commandPC[11] = tail;
-		 puts_0((unsigned char *)commandPC,12);
-		 }
-		 else
-		 {
-		 AD_Protext = 0;
-		 //卸载
-		 xiezai();
-		 //延时
-		 _delay_ms(20);
-		 //加载
-		 jiazai();
-		 }
-		 }
-		 */
 		if (int1_status == 1) //自校状态
 		{
 			key = keyscan();
@@ -1071,11 +996,6 @@ SIGNAL( SIG_OUTPUT_COMPARE0)
 	}
 }
 
-//SIGNAL(SIG_UART1_RECV)
-//{
-//
-//}
-
 //串行接收结束中断服务程序
 //#pragma interrupt_handler usart_rx_isr:14
 //void usart_rx_isr(void)
@@ -1162,72 +1082,44 @@ SIGNAL( SIG_UART1_RECV)
 			index = 0;
 		}
 	}
-//	switch(data)
-//	{
-//		case 0:break;
-//	}
-//	usart_putchar_0(data);
-	/*	if ((status & (BIT(4) | BIT(3) | BIT(2)))==0)
-	 {
-	 if(index < 2)
-	 {
-	 C2_reply[index++] = data;
-	 }
-	 if(index == 2)
-	 {
-	 //				if((C2_reply[0] == 1)&&(C2_reply[1] == ~1))
-	 //				{
-	 //					core2_replay = 1;
-	 //				}
-	 if((C2_reply[0] >0)&&(C2_reply[0] <0x10)&&(C2_reply[1] == ~C2_reply[0]))
-	 {
-	 puts_0((unsigned char *)C2_reply,2);
-	 }else if((C2_reply[0] == fail)&&(C2_reply[1] == ~fail))
-	 {
-	 core2_replay = 2;
-	 puts_0((unsigned char *)C2_reply,2);
-	 }else if((C2_reply[0] == req_set)&&(C2_reply[1] == ~req_set))
-	 {
-	 //					core2_replay = 3;
-	 #ifdef _PART_EEPROM_
-	 flashread(6);
-	 #endif
-	 _delay_ms(5);
-	 puts_1((unsigned char *)setbackup,22);
-	 _delay_ms(1);
-	 puts_1((unsigned char *)setbackup,22);
-	 //					_delay_ms(1);
-	 //加载
-	 //					command[0] = head;
-	 //					command[1] = 6;
-	 //					command[2] = ~command[1];
-	 //					command[3] = 1;
-	 //					command[4] = ~command[3];
-	 //					command[5] = tail;
-	 //					puts_1((unsigned char *)command,6);
-	 }else if((C2_reply[0] == req_on)&&(C2_reply[1] == ~req_on))
-	 {
-	 //					core2_replay = 3;
-	 #ifdef _PART_EEPROM_
-	 flashread(6);
-	 #endif
-	 _delay_ms(5);
-	 puts_1((unsigned char *)setbackup,22);
-	 _delay_ms(1);
-	 puts_1((unsigned char *)setbackup,22);
-	 _delay_ms(1);
-	 //加载
-	 command[0] = head;
-	 command[1] = 6;
-	 command[2] = ~command[1];
-	 command[3] = 1;
-	 command[4] = ~command[3];
-	 command[5] = tail;
-	 puts_1((unsigned char *)command,6);
-	 }
-	 index = 0;
-	 }
-	 }*/
+}
+
+void Set_Voltage_base(uchar F,uchar H,uchar L)
+{
+	int temp;
+	unsigned char send[8];
+	if(F)
+	{
+	// <0
+		temp = command[9]*100;
+		temp +=command[10];
+		temp = 65536*temp/2000;
+		temp = -temp;	
+	}
+	else
+	{
+	// >0
+		temp = command[9]*100;
+		temp +=command[10];
+		temp = 65536*temp/2000;	
+	}
+	send[0] = (0x4A<<1);//i2c write
+	send[1] = (temp &0xff00)>>8;
+	send[2] = (temp &0x00ff);
+	send[3] = send[1];
+	send[4] = send[2];
+	TWI_Start_Transceiver_With_Data(send,5);
+}
+
+void Get_Phase(uchar c)
+{
+	unsigned char send[8];
+	send[0] = (0x4A<<1);//i2c write
+	send[1] = c;
+	send[2] = c;
+	send[3] = !c;
+	send[4] = !c;
+	TWI_Start_Transceiver_With_Data(send,5);
 }
 
 //串行接收结束中断服务程序
@@ -1331,7 +1223,8 @@ SIGNAL( SIG_UART0_RECV)
 				OCR1A = 24000 - 1; //24000->100ms
 				btimer = 0;
 			}
-
+//set voltage base for assist core
+			Set_Voltage_base(commandPC[8],commandPC[9],commandPC[10]);
 			break;
 		}
 		case 6:
@@ -1417,6 +1310,12 @@ SIGNAL( SIG_UART0_RECV)
 			puts_0((unsigned char *) command, 12);
 			break;
 		}
+		case 9:
+		{
+			Get_Phase(command[5]);
+			break;
+		}
+
 		default:
 			break;
 		}
@@ -1427,6 +1326,7 @@ SIGNAL( SIG_UART0_RECV)
 	}
 }
 
+#if 0
 //外中断1服务程序
 //#pragma interrupt_handler int0_isr:2
 //void int0_isr(void)
@@ -1469,6 +1369,19 @@ SIGNAL( SIG_INTERRUPT1) //自校自锁
 		}
 	}
 }
+#endif
+
+//外中断1服务程序
+//#pragma interrupt_handler int0_isr:2
+//void int0_isr(void)
+SIGNAL( SIG_INTERRUPT7) //自校自锁
+{
+	//外中断7
+	unsigned char send[8];
+	send[0] = (0x4A<<1|1);//i2c read
+	TWI_Start_Transceiver_With_Data(send,5);
+}
+
 
 //定时器T1匹配中断A服务程序
 //#pragma interrupt_handler timer1_compa_isr:8
@@ -1479,68 +1392,16 @@ SIGNAL( SIG_OUTPUT_COMPARE1A) //	AD	定时器	中断
 //	static	int int_timer1 = 0;
 	unsigned char check = 0; //添加量程提示
 	unsigned char i;
-	static unsigned char fenpin = 0;
+//	static unsigned char fenpin = 0;
 //	static unsigned char dfenpin = 0;
-	int m_liangchen = 0;
+//	int m_liangchen = 0;
 
-	static unsigned int LL = 0;
+//	static unsigned int LL = 0;
 
-	static unsigned int low = 50000;
-	static unsigned int high = 0;
-	static unsigned char len = 0;
-	static unsigned char clearintx = 0;
-//	unsigned char j;
-//	unsigned long temp = 0;
-//	unsigned int	t[5];
-//	unsigned int	high_1 = 0;
-//	unsigned int	low_1 = 0;
-//	static int cnt = 0;
-//if(cnt++ == 4)
-//{
-//cnt = 0;
-//	long temp = 0;
-//	int low,top;
-//	low = 65535;
-//	top = 0;
-//	static int cnt = 0;
-//	if(cnt++ == 9)
-//	{
-//		cnt = 0;
-//		PORTG ^= BIT(0);
-	/*		for(j=0;j<4;j++)
-	 {
-	 AD_getdata(0);
-	 if(Vw>high_1)
-	 high_1 = Vw;
-	 if(Vw<low_1)
-	 low_1 = Vw;
-	 temp += Vw;
-	 }
-	 Vw = (temp-high_1-low_1)/2;*/
-//		AD_getdata(1);
-//		AD_getdata(3);
-//		AD_getdata(4);
-	/*		for(j=0;j<5;j++)
-	 {
-	 AD_getdata(0);
-	 temp+=Vw;
-	 t[j] = Vw;
-	 }
-	 j = 0;
-	 Vw =temp/5;
-	 while(fabs(high_1-Vw)>10)
-	 {
-	 high_1 = Vw;
-	 AD_getdata(0);
-	 temp -=t[j];
-	 t[j] = Vw;
-	 Vw = (temp+Vw)/5;
-	 if(j++ == 4)
-	 j = 0;
-	 }*/
-//		AD_getdata(3);
-//		Vr = 0;
-//		Vi = 0;
+//	static unsigned int low = 50000;
+//	static unsigned int high = 0;
+//	static unsigned char len = 0;
+//	static unsigned char clearintx = 0;
 	AD_getdata(0);
 	AD_getdata(1);
 	AD_getdata(2);
@@ -1563,23 +1424,11 @@ SIGNAL( SIG_OUTPUT_COMPARE1A) //	AD	定时器	中断
 	else
 		Vi = (16384 - ((unsigned int) VrefAD_3 - (unsigned int) Vi));
 
-//		data[0] = (Ad>>8)&0xFF;
-//		data[1] = Ad&0xFF;
-//		data[2] = 0xFF;
-//		data[3] = 0xFF;
-//		puts_0((unsigned char *)data,4);
-
 	data[0] = head;
 	data[1] = 2;
 	data[2] = ~data[1];
 	data[3] = (Vw >> 8) & 0xFF;
 	data[4] = Vw & 0xFF;
-//		data[3] = (Ad>>8)&0xFF;
-//		data[4] = Ad&0xFF;
-//		data[5] = (Ad>>8)&0xFF;
-//		data[6] = Ad&0xFF;
-//		data[7] = (Ad>>8)&0xFF;
-//		data[8] = Ad&0xFF;
 	data[5] = (Vr >> 8) & 0xFF;
 	data[6] = Vr & 0xFF;
 	data[7] = (Vi >> 8) & 0xFF;
@@ -1592,147 +1441,5 @@ SIGNAL( SIG_OUTPUT_COMPARE1A) //	AD	定时器	中断
 	data[10] = ~check;
 	data[11] = tail;
 //		puts_0("hello",5);
-	puts_0((unsigned char *) data, 12);
-/////////////////////////////////////////////////////////////////////////////////切换量程
-
-	if (btimer == 0)
-	{
-		if (clearintx++ == 50)
-		{
-			clearintx = 0;
-			intx_status = 0;
-		}
-		if (fenpin++ == jishu)
-		{
-			fenpin = 0;
-			jishu = 0;
-			m_liangchen = liangchen;
-			if (Vi < 8912)
-			{
-				if (Vi > 655)
-					LL++;
-				if (Vi > high)
-					high = Vi;
-				if (Vi < low)
-					low = Vi;
-			}
-			else if (Vi >= 8912 && Vi < 16384)
-			{
-				Vi = 16384 - Vi;
-				if (Vi > 655)
-					LL++;
-				if (Vi > high)
-					high = Vi;
-				if (Vi < low)
-					low = Vi;
-			}
-			if (len++ == 30)
-			{
-				len = 0;
-				if (LL < 3)
-				{
-					if (m_liangchen > 0)
-						m_liangchen--;
-					huandang(m_liangchen);
-					jishu = 10;
-				}
-//			if(high <=400 && m_liangchen>1)
-//			{
-//				m_liangchen--;
-//				huandang(m_liangchen);
-//				jishu = 100;
-//			}
-				low = 50000;
-				high = 0;
-				LL = 0;
-			}
-			if (m_liangchen != liangchen)
-			{
-				liangchen = m_liangchen;
-				commandPC[0] = head;
-				commandPC[1] = 3;
-				commandPC[2] = ~commandPC[1];
-				commandPC[3] = (unsigned char) liangchen;
-				commandPC[11] = tail;
-				puts_0((unsigned char *) commandPC, 12);
-			}
-			/*		while(Vi > 2000)
-			 {
-			 if(m_liangchen == 6)
-			 break;
-			 m_liangchen++;
-			 huandang(m_liangchen);
-			 _delay_ms(1);
-			 AD_getdata(2);
-			 }*/
-		}
-	}
-	else if (btimer == 1)
-	{
-		if (clearintx++ == 500)
-		{
-			clearintx = 0;
-			intx_status = 0;
-		}
-		if (fenpin++ == jishu)
-		{
-			fenpin = 0;
-			jishu = 0;
-			m_liangchen = liangchen;
-			if (Vi < 8912)
-			{
-				if (Vi > 655)
-					LL++;
-				if (Vi > high)
-					high = Vi;
-				if (Vi < low)
-					low = Vi;
-			}
-			else if (Vi >= 8912 && Vi < 16384)
-			{
-				Vi = 16384 - Vi;
-				if (Vi > 655)
-					LL++;
-				if (Vi > high)
-					high = Vi;
-				if (Vi < low)
-					low = Vi;
-			}
-			if (len++ == 30)
-			{
-				len = 0;
-				if (LL < 3)
-				{
-					if (m_liangchen > 0)
-						m_liangchen--;
-					huandang(m_liangchen);
-					jishu = 100;
-				}
-//			if(high <=400 && m_liangchen>1)
-//			{
-//				m_liangchen--;
-//				huandang(m_liangchen);
-//				jishu = 100;
-//			}
-				low = 50000;
-				high = 0;
-				LL = 0;
-			}
-			if (m_liangchen != liangchen)
-			{
-				liangchen = m_liangchen;
-				commandPC[0] = head;
-				commandPC[1] = 3;
-				commandPC[2] = ~commandPC[1];
-				commandPC[3] = (unsigned char) liangchen;
-				commandPC[11] = tail;
-				puts_0((unsigned char *) commandPC, 12);
-			}
-		}
-	}
-
-/////////////////////////////////////////////////////////////////////////////////
-//过载保护???
-//	if((Vi>50000) || (Vw>50000) || (Vr>50000))
-//		AD_Protext = 1;	
+	puts_0((unsigned char *) data, 12);	
 }
