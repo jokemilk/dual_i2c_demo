@@ -562,6 +562,7 @@ int main(void)
 {
 	init_devices();
 	TWI_Start_Transceiver();
+	write(0x8000);
 	//在这继续添加你的代码
 	//auto calibration	
 	while(1)
@@ -585,7 +586,7 @@ int main(void)
 			case 0:Read_phase(Configs.fetch_no);TWI_buf[0] = (uchar)((Configs.phase[Configs.fetch_no]&0xff00)>>8);TWI_buf[1] = (uchar)((Configs.phase[Configs.fetch_no-1]&0x00ff));TWI_buf[2] = TWI_buf[0]^TWI_buf[1];Configs.fetch_no = 0xff;PORTD|=BIT(0);break;
 			case 1:Read_phase(Configs.fetch_no);TWI_buf[0] = (uchar)((Configs.phase[Configs.fetch_no]&0xff00)>>8);TWI_buf[1] = (uchar)((Configs.phase[Configs.fetch_no-1]&0x00ff));TWI_buf[2] = TWI_buf[0]^TWI_buf[1];Configs.fetch_no = 0xff;PORTD|=BIT(0);break;
 			case 2:Read_phase(Configs.fetch_no);TWI_buf[0] = (uchar)((Configs.phase[Configs.fetch_no]&0xff00)>>8);TWI_buf[1] = (uchar)((Configs.phase[Configs.fetch_no-1]&0x00ff));TWI_buf[2] = TWI_buf[0]^TWI_buf[1];Configs.fetch_no = 0xff;PORTD|=BIT(0);break;
-			case 3:if(TWI_buf[0] == TWI_buf[2])Configs.base_voltage = (TWI_buf[0]<<8)+TWI_buf[1];break;//set voltage base
+			case 3:if(TWI_buf[0] == TWI_buf[2])Configs.base_voltage = (TWI_buf[0]<<8)+TWI_buf[1];write(Configs.base_voltage);break;//set voltage base
 			default:break;
 		}
 	}
