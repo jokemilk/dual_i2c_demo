@@ -144,7 +144,7 @@ void ExtIrq_Init(void)
 	port_init();
 	usart_init();
 	watchdog_ini();
-	int_init();
+//	int_init();
 	timer1_init();
 	TWI_Master_Initialise();
 }
@@ -1193,6 +1193,7 @@ SIGNAL( SIG_UART0_RECV)
 			STOP_TIMER1;
 			//¹Øled
 			PORTG &= ~BIT(0);
+			Set_Voltage_base(0,0,0);
 			break;
 		}
 		case 4:

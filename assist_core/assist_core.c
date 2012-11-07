@@ -521,13 +521,13 @@ void init_devices(void)
 //	GICR   = 0x00;
 	port_init();
 	timer0_init();
-//	timer1_init();
+	timer1_init();
 	spi_init();
 	watchdog_init();
 //initial the i2c interface address : 0x4a
 	TWI_Slave_Initialise(0x4a<<1);
 //pin change interrput
-//	int_init();
+	int_init();
 //adc 
 //	adc_init();
 
