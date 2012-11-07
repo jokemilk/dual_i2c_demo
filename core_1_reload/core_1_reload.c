@@ -144,7 +144,7 @@ void ExtIrq_Init(void)
 	port_init();
 	usart_init();
 	watchdog_ini();
-//	int_init();
+	int_init();
 	timer1_init();
 	TWI_Master_Initialise();
 }

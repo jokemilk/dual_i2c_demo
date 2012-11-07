@@ -15,7 +15,7 @@
 
 struct CONFIGS{
 	int base_voltage;
-	int phase[3];
+	long phase[3];
 	long ticks;
 	int flag;
 	int fetch_no;
@@ -463,7 +463,7 @@ void int_init(void)
 
 //config PD2...PD7 to pin change interrput
 //	PCICR |=(1<<PCIF2);
-	PCMSK2 |=0xFB;
+	PCMSK2 |=1<<PCINT20;//PCINT20
 }
 
 
@@ -492,7 +492,7 @@ SIGNAL(INT1_vect)
 	else
 	{
 		STOP_T1;
-		PCICR =0;
+		EIMSK =0;
 		Configs.flag=1;
 	}
 }
@@ -507,7 +507,7 @@ SIGNAL(PCINT2_vect)
 	else if(TCCR1B!=0)
 	{
 		STOP_T1;
-		EIMSK =0;
+		PCICR=0;
 		Configs.flag=1;
 	}
 }
@@ -536,18 +536,21 @@ void init_devices(void)
 
 long Read_phase(uchar p)
 {
+	int cnt = 0;
 	//default the tick
 	Configs.ticks=0;
 	Configs.flag=0;
 	//set the intc
 	switch(p)
 	{
-		case 0:EIMSK =1<<INT0;PCICR=0;EICRA |=(1<<ISC00)|(1<<ISC01);break;
-		case 1:EIMSK =1<<INT1;PCICR=0;EICRA |=(1<<ISC10)|(1<<ISC11);break;
-		case 2:EIMSK =0;PCICR |=(1<<PCIF2);break;
+		case 0:PCICR=0;EICRA |=(1<<ISC00)|(1<<ISC01);EIMSK =1<<INT0;break;
+		case 1:PCICR=0;EICRA |=(1<<ISC10)|(1<<ISC11);EIMSK =1<<INT1;break;
+		//PD4  PCINT20
+		case 2:EIMSK =0;PCICR |=(1<<PCIE2);break;
 	}
 	//wait the result
-	while(!Configs.flag);
+	while(!Configs.flag && cnt++!=20) _delay_ms(100);//break out when time out 2s
+	Configs.phase[p] = Configs.ticks;
 	//return the result
 	return Configs.phase[p];
 }
@@ -572,8 +575,14 @@ int main(void)
 	{
 		switch(Configs.fetch_no)
 		{
-			case 1:Read_phase(Configs.fetch_no);TWI_buf[0] = (uchar)((Configs.phase[Configs.fetch_no]&0xff00)>>8);TWI_buf[1] = (uchar)((Configs.phase[Configs.fetch_no-1]&0x00ff));TWI_buf[2] = TWI_buf[0]^TWI_buf[1];Configs.fetch_no = 0xff;PORTD|=BIT(0);break;
-			case 2:Read_phase(Configs.fetch_no);TWI_buf[0] = (uchar)((Configs.phase[Configs.fetch_no]&0xff00)>>8);TWI_buf[1] = (uchar)((Configs.phase[Configs.fetch_no-1]&0x00ff));TWI_buf[2] = TWI_buf[0]^TWI_buf[1];Configs.fetch_no = 0xff;PORTD|=BIT(0);break;
+			case 0:
+			case 1:
+			case 2:Read_phase(Configs.fetch_no);
+					TWI_buf[0] = (uchar)((Configs.phase[Configs.fetch_no]&0xff000000)>>24);
+					TWI_buf[1] = (uchar)((Configs.phase[Configs.fetch_no]&0x00ff0000)>>16);
+					TWI_buf[2] = (uchar)((Configs.phase[Configs.fetch_no]&0x0000ff00)>>8);
+					TWI_buf[3] = (uchar)((Configs.phase[Configs.fetch_no]&0x000000ff));
+					Configs.fetch_no = 0xff;PORTD|=BIT(0);break;			
 			case 3:	if(TWI_buf[0] == TWI_buf[2])
 					{
 						Configs.base_voltage = (TWI_buf[0]<<8)+TWI_buf[1];
