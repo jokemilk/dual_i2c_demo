@@ -1091,17 +1091,17 @@ void Set_Voltage_base(uchar F,uchar H,uchar L)
 	if(F)
 	{
 	// <0
-		temp = command[9]*100;
-		temp +=command[10];
-		temp = 65536*temp/2000;
+		temp = H*100;
+		temp +=L;
+		temp = 65536*temp/10000;
 		temp = -temp;	
 	}
 	else
 	{
 	// >0
-		temp = command[9]*100;
-		temp +=command[10];
-		temp = 65536*temp/2000;	
+		temp = H*100;
+		temp +=L;
+		temp = 65536*temp/10000;	
 	}
 	send[0] = (0x4A<<1);//i2c write
 	send[1] = (temp &0xff00)>>8;

@@ -21,7 +21,7 @@ struct CONFIGS{
 	int fetch_no;
 };
 
-struct CONFIGS Configs = {0x8000,{0,0,0},0,0,0xff};
+volatile struct CONFIGS Configs = {0x8000,{0,0,0},0,0,0xff};
 
 
 //端口初始化
@@ -76,7 +76,7 @@ void timer1_init(void)
 //定时器T1匹配中断A服务程序
 //#pragma interrupt_handler timer1_compa_isr:8
 //void timer1_compa_isr(void)
-SIGNAL(SIG_OUTPUT_COMPARE1A)
+SIGNAL(TIMER1_COMPA_vect)
 {
 	//compare occured TCNT1=OCR1A
 //	PORTB ^=BIT(1);
@@ -152,14 +152,14 @@ unsigned int adc_calc(void)
 //T0比较中断服务程序
 //#pragma interrupt_handler timer0_comp_isr:11
 //void timer0_comp_isr(void)
-SIGNAL(SIG_OUTPUT_COMPARE0A)
+SIGNAL(TIMER0_COMPA_vect)
 {
 	static int i = 0;
 	wdt_reset();
 	if (i++ == 4)
 	{
 		i = 0;
-		PORTB ^= BIT(0);
+		PORTD ^= BIT(1);
 	}
 }
 
@@ -172,7 +172,7 @@ void watchdog_init(void)
 	WDTCSR = 0x1F; //WATCHDOG ENABLED - dont forget to issue WDRs
 }
 
-static unsigned char TWI_buf[TWI_BUFFER_SIZE];     // Transceiver buffer. Set the size in the header file
+static volatile unsigned char TWI_buf[TWI_BUFFER_SIZE];     // Transceiver buffer. Set the size in the header file
 static unsigned char TWI_msgSize  = 4;             // Number of bytes to be transmitted.
 static unsigned char TWI_state    = TWI_NO_STATE;  // State byte. Default set to TWI_NO_STATE.
 
@@ -190,7 +190,7 @@ union TWI_statusReg TWI_statusReg = {0};           // TWI_statusReg is defined i
  * ---------------------------------------------------------------------------------------------- */
 void TWI_Slave_Initialise( unsigned char TWI_ownAddress )
 {
-	TWBR = TWI_TWBR;								  // Set bit rate register (Baudrate). Defined in header file. 
+//	TWBR = TWI_TWBR;								  // Set bit rate register (Baudrate). Defined in header file. 
   TWAR = TWI_ownAddress;                            // Set own TWI slave address. Accept TWI General Calls.
   TWDR = 0xFF;                                      // Default content = SDA released.
   TWCR = (1<<TWEN)|                                 // Enable TWI-interface and release TWI pins.
@@ -313,82 +313,84 @@ unsigned char TWI_Get_Data_From_Transceiver( unsigned char *msg, unsigned char m
 }
 
 
+
 /**
  * This function is the Interrupt Service Routine (ISR), and called when the TWI interrupt is
  * triggered; that is whenever a TWI event has occurred. This function should not be called
  * directly from the main application.
  * ---------------------------------------------------------------------------------------------- */
-SIGNAL(SIG_2WIRE_SERIAL)
+SIGNAL((TWI_vect))
 {
-    static unsigned char TWI_bufPtr;
-    
-    switch (TWSR)
-    {
-        // Own SLA+R has been received; ACK has been returned
-        case TWI_STX_ADR_ACK:
-            // Set buffer pointer to first data location
-            TWI_bufPtr   = 0;
-    
-        // Data byte in TWDR has been transmitted; ACK has been received
-        case TWI_STX_DATA_ACK:
-            TWDR = TWI_buf[TWI_bufPtr++];
-            
-            // TWI Interface enabled
-            // Enable TWI Interupt and clear the flag to send byte
-            TWCR = (1<<TWEN) | 
-            		(1<<TWIE)|(1<<TWINT)| 
-            		(1<<TWEA)|(0<<TWSTA)|(0<<TWSTO)|
-            		(0<<TWWC);
-            break;
-            
-        // Data byte in TWDR has been transmitted; NACK has been received.
-        // I.e. this could be the end of the transmission.
-        case TWI_STX_DATA_NACK:  
-            // Have we transceived all expected data?
-            if (TWI_bufPtr == TWI_msgSize) 
-            {
-                // Set status bits to completed successfully.
-                TWI_statusReg.lastTransOK = TRUE; 
-            }
-            else
-            {
-                // Master has sent a NACK before all data where sent.
-                // Store TWI State as errormessage.
-                TWI_state = TWSR;      
-            }
-            
-            // Put TWI Transceiver in passive mode.
-            // Enable TWI-interface and release TWI pins
+ 
+ static unsigned char TWI_bufPtr;
+ 
+ switch (TWSR)
+ {
+	 // Own SLA+R has been received; ACK has been returned
+	 case TWI_STX_ADR_ACK:
+		 // Set buffer pointer to first data location
+		 TWI_bufPtr   = 0;
+ 
+	 // Data byte in TWDR has been transmitted; ACK has been received
+	 case TWI_STX_DATA_ACK:
+		 TWDR = TWI_buf[TWI_bufPtr++];
+		 
+		 // TWI Interface enabled
+		 // Enable TWI Interupt and clear the flag to send byte
+		 TWCR = (1<<TWEN) | 
+				 (1<<TWIE)|(1<<TWINT)| 
+				 (1<<TWEA)|(0<<TWSTA)|(0<<TWSTO)|
+				 (0<<TWWC);
+		 break;
+		 
+	 // Data byte in TWDR has been transmitted; NACK has been received.
+	 // I.e. this could be the end of the transmission.
+	 case TWI_STX_DATA_NACK:  
+		 // Have we transceived all expected data?
+		 if (TWI_bufPtr == TWI_msgSize) 
+		 {
+			 // Set status bits to completed successfully.
+			 TWI_statusReg.lastTransOK = TRUE; 
+		 }
+		 else
+		 {
+			 // Master has sent a NACK before all data where sent.
+			 // Store TWI State as errormessage.
+			 TWI_state = TWSR;		
+		 }
+		 
+		 // Put TWI Transceiver in passive mode.
+		 // Enable TWI-interface and release TWI pins
+		 TWCR = (1<<TWEN)|
+				(1<<TWIE)|(1<<TWINT)|				 // Disable Interupt
+				(1<<TWEA)|(0<<TWSTA)|(0<<TWSTO)|	 // Do not acknowledge on any new requests.
+				(0<<TWWC);
+		 //return the u1 intc
+		 PORTD &=~BIT(0);
+		break;	   
+		
+	 // General call address has been received; ACK has been returned
+	 case TWI_SRX_GEN_ACK:
+ 
+		 TWI_statusReg.genAddressCall = TRUE;
+	 // Own SLA+W has been received ACK has been returned
+	 case TWI_SRX_ADR_ACK:
+ 
+		 // Dont need to clear TWI_S_statusRegister.generalAddressCall due to that it is the default state.
+		 TWI_statusReg.RxDataInBuf = TRUE;		
+		 
+		 // Set buffer pointer to first data location
+		 TWI_bufPtr   = 0;
+		 
+		 // Reset the TWI Interupt to wait for a new event.
+		 
+		 // TWI Interface enabled
+		 // Enable TWI Interupt and clear the flag to send byte
+		 // Expect ACK on this transmission 
             TWCR = (1<<TWEN)|
-                   (1<<TWIE)|(1<<TWINT)|                // Disable Interupt
-                   (1<<TWEA)|(0<<TWSTA)|(0<<TWSTO)|     // Do not acknowledge on any new requests.
-                   (0<<TWWC);
-			//rest the u1 intc
-			PORTD &=~BIT(0);
-           break;     
-           
-        // General call address has been received; ACK has been returned
-        case TWI_SRX_GEN_ACK:
-
-            TWI_statusReg.genAddressCall = TRUE;
-        // Own SLA+W has been received ACK has been returned
-        case TWI_SRX_ADR_ACK:
-
-            // Dont need to clear TWI_S_statusRegister.generalAddressCall due to that it is the default state.
-            TWI_statusReg.RxDataInBuf = TRUE;      
-            
-            // Set buffer pointer to first data location
-            TWI_bufPtr   = 0;
-            
-            // Reset the TWI Interupt to wait for a new event.
-            
-            // TWI Interface enabled
-            // Enable TWI Interupt and clear the flag to send byte
-            // Expect ACK on this transmission
-            TWCR = (1<<TWEN)| (1<<TWIE)|
-            		(1<<TWINT)| (1<<TWEA)|
-            		(0<<TWSTA)|(0<<TWSTO)| 
-            		(0<<TWWC);                                 //      
+            		(1<<TWIE)|(1<<TWINT)| 
+            		(1<<TWEA)|(0<<TWSTA)|(0<<TWSTO)| 
+            		(0<<TWWC);                                 //    
         break;
         
     // Previously addressed with own SLA+W; data has been received; ACK has been returned
@@ -417,9 +419,8 @@ SIGNAL(SIG_2WIRE_SERIAL)
                (1<<TWIE)|(1<<TWINT)|               // Disable Interupt
                (1<<TWEA)|(0<<TWSTA)|(0<<TWSTO)|    // Do not acknowledge on any new requests.
                (0<<TWWC);
-		//PORTC ^=BIT(0);
-		if(TWI_buf[0] == TWI_buf[1])
-			Configs.fetch_no = TWI_buf[1];
+		if(TWI_buf[0] == TWI_buf[1] && TWI_buf[0] == !TWI_buf[2])
+			Configs.fetch_no = TWI_buf[0];
 		else if(TWI_buf[0] == TWI_buf[2])
 			{
 			Configs.fetch_no = 3;
@@ -440,7 +441,7 @@ SIGNAL(SIG_2WIRE_SERIAL)
 
     default:
 		TWI_state = TWSR;								  // Store TWI State as errormessage, operation also clears the Success bit.	  
-				TWSR = TWI_NO_STATE;
+//				TWSR = TWI_NO_STATE;
 		TWCR = (1<<TWEN)|								  // Enable TWI-interface and release TWI pins
 			   (1<<TWIE)|(1<<TWINT)|					  // Disable Interupt
 			   (1<<TWEA)|(0<<TWSTA)|(0<<TWSTO)| 		  // Do not acknowledge on any new requests.
@@ -466,9 +467,9 @@ void int_init(void)
 }
 
 
-SIGNAL(SIG_INTERRUPT0)
+SIGNAL(INT0_vect)
 {
-	if(PORTD & BIT(0))
+	if(PORTD & BIT(2))
 	{
 		EICRA |=(0<<ISC00)|(1<<ISC01);//level change mode
 		START_T1;
@@ -481,9 +482,9 @@ SIGNAL(SIG_INTERRUPT0)
 	}
 }
 
-SIGNAL(SIG_INTERRUPT1)
+SIGNAL(INT1_vect)
 {
-	if(PORTD & BIT(1))
+	if(PORTD & BIT(3))
 	{
 		EICRA |=(0<<ISC10)|(1<<ISC11);//level change mode
 		START_T1;
@@ -496,12 +497,10 @@ SIGNAL(SIG_INTERRUPT1)
 	}
 }
 
-
-
 //pin int handler
-SIGNAL(SIG_PIN_CHANGE2)
+SIGNAL(PCINT2_vect)
 {
-	if(PORTD & BIT(2))
+	if(PORTD & BIT(4))
 	{	
 		START_T1;
 	}
@@ -513,6 +512,7 @@ SIGNAL(SIG_PIN_CHANGE2)
 	}
 }
 
+
 void init_devices(void)
 {
 	cli(); //禁止所有中断
@@ -521,7 +521,7 @@ void init_devices(void)
 //	GICR   = 0x00;
 	port_init();
 	timer0_init();
-	timer1_init();
+//	timer1_init();
 	spi_init();
 	watchdog_init();
 //initial the i2c interface address : 0x4a
@@ -530,6 +530,7 @@ void init_devices(void)
 //	int_init();
 //adc 
 //	adc_init();
+
 	sei();//开全局中断
 }
 
@@ -553,40 +554,33 @@ long Read_phase(uchar p)
 
 void set_vol_base(int v)
 {
-	Configs.base_voltage=v;
-	write(v);
+	char i;
+	for(i=0;i<10;i++)
+		write(v);
 }
+
 
 //主函数
 int main(void)
 {
 	init_devices();
 	TWI_Start_Transceiver();
-	write(0x8000);
+	set_vol_base(0x8000);
 	//在这继续添加你的代码
 	//auto calibration	
 	while(1)
 	{
-		 NOP();
-//		 write(i++);
-//		 _delay_ms(1000);
-/*		
-		if(0xffff!=Configs.base_voltage)
-		{
-		//read phase_1
-			Read_phase(0);
-		//read phase_2
-			Read_phase(1);
-		//read phase_3
-			Read_phase(2);
-		}
-*/
 		switch(Configs.fetch_no)
 		{
-			case 0:Read_phase(Configs.fetch_no);TWI_buf[0] = (uchar)((Configs.phase[Configs.fetch_no]&0xff00)>>8);TWI_buf[1] = (uchar)((Configs.phase[Configs.fetch_no-1]&0x00ff));TWI_buf[2] = TWI_buf[0]^TWI_buf[1];Configs.fetch_no = 0xff;PORTD|=BIT(0);break;
 			case 1:Read_phase(Configs.fetch_no);TWI_buf[0] = (uchar)((Configs.phase[Configs.fetch_no]&0xff00)>>8);TWI_buf[1] = (uchar)((Configs.phase[Configs.fetch_no-1]&0x00ff));TWI_buf[2] = TWI_buf[0]^TWI_buf[1];Configs.fetch_no = 0xff;PORTD|=BIT(0);break;
 			case 2:Read_phase(Configs.fetch_no);TWI_buf[0] = (uchar)((Configs.phase[Configs.fetch_no]&0xff00)>>8);TWI_buf[1] = (uchar)((Configs.phase[Configs.fetch_no-1]&0x00ff));TWI_buf[2] = TWI_buf[0]^TWI_buf[1];Configs.fetch_no = 0xff;PORTD|=BIT(0);break;
-			case 3:if(TWI_buf[0] == TWI_buf[2])Configs.base_voltage = (TWI_buf[0]<<8)+TWI_buf[1];write(0x8000+Configs.base_voltage);break;//set voltage base
+			case 3:	if(TWI_buf[0] == TWI_buf[2])
+					{
+						Configs.base_voltage = (TWI_buf[0]<<8)+TWI_buf[1];
+						set_vol_base(0x8000+Configs.base_voltage);
+					}
+						Configs.fetch_no = 0xff;
+						break;//set voltage base
 			default:break;
 		}
 	}
