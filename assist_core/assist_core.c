@@ -32,7 +32,7 @@ void port_init(void)
 	PORTC = 0x00;
 	DDRC  = 0x00;
 	PORTD = 0x00;
-	DDRD  = 0x00|BIT(1)|BIT(0);
+	DDRD  = 0x00|BIT(1)|BIT(0)|BIT(5)|BIT(6)|BIT(7);
 }
 
 
@@ -551,6 +551,13 @@ long Read_phase(uchar p)
 	//wait the result
 	while(!Configs.flag && cnt++!=20) _delay_ms(100);//break out when time out 2s
 	Configs.phase[p] = Configs.ticks;
+	switch(p)
+	{
+		case 0:if(PORTD & BIT(5)) Configs.phase[p]|=(1<<31);break;
+		case 1:if(PORTD & BIT(6)) Configs.phase[p]|=(1<<31);break;
+		//PD4  PCINT20
+		case 2:if(PORTD & BIT(7)) Configs.phase[p]|=(1<<31);break;
+	}	
 	//return the result
 	return Configs.phase[p];
 }
