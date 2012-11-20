@@ -287,14 +287,18 @@ int main(void)
 	{
 	 NOP();
 		cnt = 5;
-		send[0] = (0x4A<<1)|1;
-		send[1] = 'h';
-		send[2] = 'e';
-		send[3] = 'l';
-		send[4] = 'l';
-		send[5] = 'o';
+		send[0] = (0x4A<<1);
+		send[1] = 2;
+		send[2] = 2;
+		send[3] = ~send[1] ;
+		send[4] = ~send[1] ;
 		TWI_Start_Transceiver_With_Data(send,cnt);
-		_delay_ms(500);
+		_delay_ms(1500);
+		cnt = 5;
+		send[0] = (0x4A<<1|1);
+		TWI_Start_Transceiver_With_Data(send,cnt);
+		_delay_ms(1500);
+
 	}
 	return 0;
 }

@@ -30,9 +30,9 @@ void port_init(void)
 	PORTB = 0x00;
 	DDRB  = 0x00|BIT(0)|BIT(1)|BIT(2)|BIT(3)|BIT(5);
 	PORTC = 0x00;
-	DDRC  = 0x00;
+	DDRC  = 0x00|BIT(1);
 	PORTD = 0x00;
-	DDRD  = 0x00|BIT(1)|BIT(0)|BIT(5)|BIT(6)|BIT(7);
+	DDRD  = 0x00|BIT(1)|BIT(0);//|BIT(2)|BIT(3);
 }
 
 
@@ -64,7 +64,7 @@ void timer1_init(void)
 	TIMSK1 |= 0x02; //中断允许
 	TCNT1H = 0x00;
 	TCNT1L = 0x00; //初始值
-	OCR1A = 96 - 1;//80k //7680->1ms
+	OCR1A = 24 - 1;//80k //7680->1ms
 	OCR1BH = 0x00;
 	OCR1BL = 0x03; //匹配B值
 	ICR1H = 0xFF;
@@ -172,7 +172,7 @@ void watchdog_init(void)
 	WDTCSR = 0x1F; //WATCHDOG ENABLED - dont forget to issue WDRs
 }
 
-static volatile unsigned char TWI_buf[TWI_BUFFER_SIZE];     // Transceiver buffer. Set the size in the header file
+static unsigned char TWI_buf[TWI_BUFFER_SIZE];     // Transceiver buffer. Set the size in the header file
 static unsigned char TWI_msgSize  = 4;             // Number of bytes to be transmitted.
 static unsigned char TWI_state    = TWI_NO_STATE;  // State byte. Default set to TWI_NO_STATE.
 
@@ -418,13 +418,16 @@ SIGNAL((TWI_vect))
         TWCR = (1<<TWEN)|                          // Enable TWI-interface and release TWI pins
                (1<<TWIE)|(1<<TWINT)|               // Disable Interupt
                (1<<TWEA)|(0<<TWSTA)|(0<<TWSTO)|    // Do not acknowledge on any new requests.
-               (0<<TWWC);
-		if(TWI_buf[0] == TWI_buf[1] && TWI_buf[0] == !TWI_buf[2])
-			Configs.fetch_no = TWI_buf[0];
-		else if(TWI_buf[0] == TWI_buf[2])
-			{
-			Configs.fetch_no = 3;
+               (0<<TWWC);		
+		if(TWI_buf[0] == TWI_buf[2])
+		{
+				Configs.fetch_no = 3;		
+		}	
+		else if(TWI_buf[0] == TWI_buf[1])
+		{
+				Configs.fetch_no = TWI_buf[0];	
 		}
+
         break;
         
     // Previously addressed with own SLA+W; data has been received; NOT ACK has been returned
@@ -463,33 +466,34 @@ void int_init(void)
 
 //config PD2...PD7 to pin change interrput
 //	PCICR |=(1<<PCIF2);
-	PCMSK2 |=1<<PCINT20;//PCINT20
+	PCMSK2 =1<<PCINT20;//PCINT20
 }
 
 
 SIGNAL(INT0_vect)
 {
-	if(PORTD & BIT(2))
+	if(PIND & BIT(2))
 	{
-		EICRA |=(0<<ISC00)|(1<<ISC01);//level change mode
+		EICRA =(0<<ISC00)|(1<<ISC01);//level change mode
 		START_T1;
+		PORTD ^=BIT(1);
 	}
-	else
+	else if(TCCR1B!=0)
 	{
 		STOP_T1;
 		EIMSK =0;
-		Configs.flag=1;
+		Configs.flag=1;		
 	}
 }
 
 SIGNAL(INT1_vect)
 {
-	if(PORTD & BIT(3))
+	if(PIND & BIT(3))
 	{
-		EICRA |=(0<<ISC10)|(1<<ISC11);//level change mode
+		EICRA =(0<<ISC10)|(1<<ISC11);//level change mode
 		START_T1;
 	}
-	else
+	else if(TCCR1B!=0)
 	{
 		STOP_T1;
 		EIMSK =0;
@@ -500,7 +504,7 @@ SIGNAL(INT1_vect)
 //pin int handler
 SIGNAL(PCINT2_vect)
 {
-	if(PORTD & BIT(4))
+	if(PIND & BIT(4))
 	{	
 		START_T1;
 	}
@@ -543,21 +547,23 @@ long Read_phase(uchar p)
 	//set the intc
 	switch(p)
 	{
-		case 0:PCICR=0;EICRA |=(1<<ISC00)|(1<<ISC01);EIMSK =1<<INT0;break;
-		case 1:PCICR=0;EICRA |=(1<<ISC10)|(1<<ISC11);EIMSK =1<<INT1;break;
+		case 0:PCICR=0;EICRA =(1<<ISC00)|(1<<ISC01);EIMSK =1<<INT0;break;
+		case 1:PCICR=0;EICRA =(1<<ISC10)|(1<<ISC11);EIMSK =1<<INT1;break;
 		//PD4  PCINT20
-		case 2:EIMSK =0;PCICR |=(1<<PCIE2);break;
+		case 2:EIMSK =0;PCICR =(1<<PCIE2);break;
 	}
 	//wait the result
 	while(!Configs.flag && cnt++!=20) _delay_ms(100);//break out when time out 2s
+	STOP_T1;
 	Configs.phase[p] = Configs.ticks;
-	switch(p)
-	{
-		case 0:if(PORTD & BIT(5)) Configs.phase[p]|=(1<<31);break;
-		case 1:if(PORTD & BIT(6)) Configs.phase[p]|=(1<<31);break;
-		//PD4  PCINT20
-		case 2:if(PORTD & BIT(7)) Configs.phase[p]|=(1<<31);break;
-	}	
+	if(Configs.phase[p])
+		switch(p)
+		{
+			case 0:if(PORTD & BIT(5)) Configs.phase[p]|=(1<<31);break;
+			case 1:if(PORTD & BIT(6)) Configs.phase[p]|=(1<<31);break;
+			//PD4  PCINT20
+			case 2:if(PORTD & BIT(7)) Configs.phase[p]|=(1<<31);break;
+		}	
 	//return the result
 	return Configs.phase[p];
 }
@@ -569,6 +575,10 @@ void set_vol_base(int v)
 		write(v);
 }
 
+void test()
+{
+//	EIMSK =0;PCICR =(1<<PCIE2);
+}
 
 //主函数
 int main(void)
@@ -578,27 +588,31 @@ int main(void)
 	set_vol_base(0x8000);
 	//在这继续添加你的代码
 	//auto calibration	
+
+	test();
 	while(1)
 	{
+//		if(PIND &BIT(2))
+//			PORTD |=BIT(1);
+//		else
+//			PORTD &=~BIT(1);			
+	
 		switch(Configs.fetch_no)
 		{
 			case 0:
 			case 1:
-			case 2:Read_phase(Configs.fetch_no);
+			case 2:	Read_phase(Configs.fetch_no);
 					TWI_buf[0] = (uchar)((Configs.phase[Configs.fetch_no]&0xff000000)>>24);
 					TWI_buf[1] = (uchar)((Configs.phase[Configs.fetch_no]&0x00ff0000)>>16);
 					TWI_buf[2] = (uchar)((Configs.phase[Configs.fetch_no]&0x0000ff00)>>8);
 					TWI_buf[3] = (uchar)((Configs.phase[Configs.fetch_no]&0x000000ff));
 					Configs.fetch_no = 0xff;PORTD|=BIT(0);break;			
-			case 3:	if(TWI_buf[0] == TWI_buf[2])
-					{
-						Configs.base_voltage = (TWI_buf[0]<<8)+TWI_buf[1];
-						set_vol_base(0x8000+Configs.base_voltage);
-					}
-						Configs.fetch_no = 0xff;
-						break;//set voltage base
+			case 3:	Configs.base_voltage = (TWI_buf[0]<<8)+TWI_buf[1];
+					set_vol_base(0x8000+Configs.base_voltage);
+					Configs.fetch_no = 0xff;
+					break;//set voltage base
 			default:break;
-		}
+		}	
 	}
 	return 0;
 }

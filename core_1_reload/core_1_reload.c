@@ -75,7 +75,6 @@ volatile static char int1_status = 0;
 volatile static char AD_Protext = 0;
 volatile static int liangchen = 5;
 volatile static char flag_hl = 0; //恒流恒压配置状态标志位 0未配置，1配置过了
-//static unsigned char jishu = 0;
 
 static unsigned char btimer = 0; //	0 每秒10次	1 每秒100次
 volatile char flag_po = 0; //电源指示
@@ -807,6 +806,7 @@ ISR(TWI_vect)
   }
 }
 
+
 /***********************************************************/
 /***********************************************************/
 
@@ -840,37 +840,28 @@ int main()
 		my_power();
 		if ((PINA & BIT(2)) == 0) //M信号判断
 		{
-			if (btimer == 1 && liangchen < 6)
-			{
-			}
 			if (intx_status++ < 10)
 				_delay_ms(25);
 			if (intx_status == 21)
 			{
-				if (liangchen < 6)
-				{
-				}
-				else
-				{
-					//亮红灯
-					PORTG |= BIT(4);
-					//还原标志
-					xiezai();
-					//关ad
-					STOP_TIMER1;
-					_delay_ms(10);
-					//设定系统状态
-					system_status = 1;
-					commandPC[0] = head;
-					commandPC[1] = 1;
-					commandPC[2] = ~commandPC[1];
-					commandPC[11] = tail;
-					puts_0((unsigned char *) commandPC, 12);
-				}
+				//亮红灯
+				PORTG |= BIT(4);
+				//还原标志
+				xiezai();
+				//关ad
+				STOP_TIMER1;
+				_delay_ms(10);
+				//设定系统状态
+				system_status = 1;
+				commandPC[0] = head;
+				commandPC[1] = 1;
+				commandPC[2] = ~commandPC[1];
+				commandPC[11] = tail;
+				puts_0((unsigned char *) commandPC, 12);
 				intx_status = 0;
 				AD_Protext = 0;
 			}
-			else if (liangchen == 6)
+			else 
 			{
 				//卸载
 				//	xiezai();
@@ -880,6 +871,9 @@ int main()
 				//加载
 				//	jiazai();
 			}
+		}else
+		{
+			intx_status = 0;
 		}
 		if (int1_status == 1) //自校状态
 		{
@@ -996,6 +990,45 @@ SIGNAL( SIG_OUTPUT_COMPARE0)
 	}
 }
 
+void Set_Voltage_base(uchar F,uchar H,uchar L)
+{
+	int temp;
+	unsigned char send[8];
+	if(F)
+	{
+	// <0
+		temp = H*100;
+		temp +=L;
+		temp = 65536*temp/10000;
+		temp = -temp;	
+	}
+	else
+	{
+	// >0
+		temp = H*100;
+		temp +=L;
+		temp = 65536*temp/10000;	
+	}
+	send[0] = (0x4A<<1);//i2c write
+	send[1] = (temp &0xff00)>>8;
+	send[2] = (temp &0x00ff);
+	send[3] = send[1];
+	send[4] = send[2];
+	TWI_Start_Transceiver_With_Data(send,5);
+}
+
+void Get_Phase(uchar c)
+{
+	unsigned char send[8];
+	send[0] = (0x4A<<1);//i2c write
+	send[1] = c;
+	send[2] = c;
+	send[3] = !c;
+	send[4] = !c;
+	TWI_Start_Transceiver_With_Data(send,5);
+}
+
+
 //串行接收结束中断服务程序
 //#pragma interrupt_handler usart_rx_isr:14
 //void usart_rx_isr(void)
@@ -1005,7 +1038,6 @@ SIGNAL( SIG_UART1_RECV)
 	unsigned char status, data, tch;
 	status = UCSR1A;
 	data = UDR1;
-//	usart_putchar_0(data);
 	if ((status & (BIT(4) | BIT(3) | BIT(2))) == 0)
 	{
 		if (data == head)
@@ -1014,7 +1046,6 @@ SIGNAL( SIG_UART1_RECV)
 			C2_reply[index++] = data;
 		if (index == 4)
 		{
-//				puts_0((unsigned char *)C2_reply,4);
 			tch = ~C2_reply[2];
 			if (C2_reply[1] == tch)
 			{
@@ -1084,44 +1115,6 @@ SIGNAL( SIG_UART1_RECV)
 	}
 }
 
-void Set_Voltage_base(uchar F,uchar H,uchar L)
-{
-	int temp;
-	unsigned char send[8];
-	if(F)
-	{
-	// <0
-		temp = H*100;
-		temp +=L;
-		temp = 65536*temp/10000;
-		temp = -temp;	
-	}
-	else
-	{
-	// >0
-		temp = H*100;
-		temp +=L;
-		temp = 65536*temp/10000;	
-	}
-	send[0] = (0x4A<<1);//i2c write
-	send[1] = (temp &0xff00)>>8;
-	send[2] = (temp &0x00ff);
-	send[3] = send[1];
-	send[4] = send[2];
-	TWI_Start_Transceiver_With_Data(send,5);
-}
-
-void Get_Phase(uchar c)
-{
-	unsigned char send[8];
-	send[0] = (0x4A<<1);//i2c write
-	send[1] = c;
-	send[2] = c;
-	send[3] = !c;
-	send[4] = !c;
-	TWI_Start_Transceiver_With_Data(send,5);
-}
-
 //串行接收结束中断服务程序
 //#pragma interrupt_handler usart_rx_isr:14
 //void usart_rx_isr(void)
@@ -1147,8 +1140,6 @@ SIGNAL( SIG_UART0_RECV)
 			commandPC[index++] = data;
 		if (index == 2)
 			LEN = data;
-//			if((index == 3)&&(LEN !=~data))
-//				{usarterror();return;}
 		if ((index > 3) && (index > LEN))
 		{
 			usarterror();
@@ -1224,7 +1215,7 @@ SIGNAL( SIG_UART0_RECV)
 				OCR1A = 24000 - 1; //24000->100ms
 				btimer = 0;
 			}
-//set voltage base for assist core
+			//set voltage base for assist core			
 			Set_Voltage_base(commandPC[8],commandPC[9],commandPC[10]);
 			break;
 		}
@@ -1314,9 +1305,8 @@ SIGNAL( SIG_UART0_RECV)
 		case 9:
 		{
 			Get_Phase(command[5]);
-			break;
+			break;			
 		}
-
 		default:
 			break;
 		}
@@ -1327,55 +1317,10 @@ SIGNAL( SIG_UART0_RECV)
 	}
 }
 
-#if 0
 //外中断1服务程序
 //#pragma interrupt_handler int0_isr:2
 //void int0_isr(void)
-SIGNAL( SIG_INTERRUPT1) //自校自锁
-{
-	//外中断1
-//	unsigned char k;
-	if (system_status == 0)
-	{
-//		Vref = 0x7FFF;
-		if (int1_status == 0) /////////////////////加B信号控制 B=0
-		{
-			PORTD |= BIT(0);
-			_delay_ms(100);
-			wdt_reset();
-			PORTG ^= BIT(1);
-			_delay_ms(100);
-			wdt_reset();
-			PORTG ^= BIT(1);
-			_delay_ms(100);
-			wdt_reset();
-			PORTG ^= BIT(1);
-			_delay_ms(100);
-			wdt_reset();
-			PORTG ^= BIT(1);
-			_delay_ms(100);
-			wdt_reset();
-			PORTG ^= BIT(1);
-			PORTD &= ~BIT(0); //闪烁
-			AD_getdata(4);
-			VrefAD_1 = Vw;
-			VrefAD_2 = Vr;
-			VrefAD_3 = Vi;
-			VrefAD_4 = Ad;
-#ifdef _PART_EEPROM_
-			flashwrite(4);
-#endif
-			int1_status = 1;
-//			PORTA |= BIT(1);					//CH信号
-		}
-	}
-}
-#endif
-
-//外中断1服务程序
-//#pragma interrupt_handler int0_isr:2
-//void int0_isr(void)
-SIGNAL( SIG_INTERRUPT7) //自校自锁
+SIGNAL( SIG_INTERRUPT7 ) //自校自锁
 {
 	//外中断7
 	unsigned char send[8];
@@ -1383,35 +1328,19 @@ SIGNAL( SIG_INTERRUPT7) //自校自锁
 	TWI_Start_Transceiver_With_Data(send,5);
 }
 
-
 //定时器T1匹配中断A服务程序
 //#pragma interrupt_handler timer1_compa_isr:8
 //void timer1_compa_isr(void)
 SIGNAL( SIG_OUTPUT_COMPARE1A) //	AD	定时器	中断
 {
 	//compare occured TCNT1=OCR1A
-//	static	int int_timer1 = 0;
 	unsigned char check = 0; //添加量程提示
 	unsigned char i;
-//	static unsigned char fenpin = 0;
-//	static unsigned char dfenpin = 0;
-//	int m_liangchen = 0;
 
-//	static unsigned int LL = 0;
-
-//	static unsigned int low = 50000;
-//	static unsigned int high = 0;
-//	static unsigned char len = 0;
-//	static unsigned char clearintx = 0;
 	AD_getdata(0);
 	AD_getdata(1);
 	AD_getdata(2);
 
-//		while(fabs(high_1-Vw)>20)
-//		{
-//			high_1 = Vw;
-//			AD_getdata(0);
-//		}
 	if ((unsigned int) Vw > (unsigned int) VrefAD_1)
 		Vw -= VrefAD_1;
 	else
@@ -1441,6 +1370,11 @@ SIGNAL( SIG_OUTPUT_COMPARE1A) //	AD	定时器	中断
 	data[9] = check;
 	data[10] = ~check;
 	data[11] = tail;
-//		puts_0("hello",5);
-	puts_0((unsigned char *) data, 12);	
+	puts_0((unsigned char *) data, 12);
+
+/////////////////////////////////////////////////////////////////////////////////
+//过载保护???
+//	if((Vi>50000) || (Vw>50000) || (Vr>50000))
+//		AD_Protext = 1;	
 }
+
