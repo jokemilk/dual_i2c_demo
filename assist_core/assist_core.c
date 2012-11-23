@@ -15,13 +15,29 @@
 
 struct CONFIGS{
 	int base_voltage;
-	long phase[3];
-	long ticks;
-	int flag;
-	int fetch_no;
+	uint32_t phase[3];
+	uint32_t ticks;
+	unsigned char flag;
+	unsigned char fetch_no;
 };
 
+struct mychars{
+	char a4;
+	char a3;
+	char a2;
+	char a1;
+};
+
+union Mylong
+{
+	struct mychars c;
+	long l;
+};
+
+union Mylong ml;
+
 volatile struct CONFIGS Configs = {0x8000,{0,0,0},0,0,0xff};
+static int VREF = 0;
 
 
 //端口初始化
@@ -64,7 +80,7 @@ void timer1_init(void)
 	TIMSK1 |= 0x02; //中断允许
 	TCNT1H = 0x00;
 	TCNT1L = 0x00; //初始值
-	OCR1A = 24 - 1;//80k //7680->1ms
+	OCR1A = 96 - 1;//80k //7680->1ms
 	OCR1BH = 0x00;
 	OCR1BL = 0x03; //匹配B值
 	ICR1H = 0xFF;
@@ -72,6 +88,7 @@ void timer1_init(void)
 	TCCR1A = 0x00;
 
 }
+
 
 //定时器T1匹配中断A服务程序
 //#pragma interrupt_handler timer1_compa_isr:8
@@ -81,6 +98,7 @@ SIGNAL(TIMER1_COMPA_vect)
 	//compare occured TCNT1=OCR1A
 //	PORTB ^=BIT(1);
 	Configs.ticks++;
+//	PORTD ^= BIT(1);	
 }
 
 
@@ -129,7 +147,7 @@ void adc_init(void)
 {
 	//adc转换初始化
 	ADCSRA	= 0x00;	//禁止AD转换
-	ADMUX	= 0x00;
+	ADMUX	= 0x00 | (1<<REFS1)|(1<<REFS0);
     DIDR0 &=~BIT(0);
 	ACSR	= 0x80; //禁止模拟比较器
 	ADCSRA	= 0x84;
@@ -145,7 +163,8 @@ unsigned int adc_calc(void)
 	while(ADCSRA&_BV(ADSC));
 	value=ADCL;		 //首先读低位
 	value|=(int)ADCH << 8; //然后读高位
-	voltage=(value*2560)>>10;
+//	value=(value*2560)>>10;
+	voltage = value;
 	return voltage;
 }
 
@@ -159,7 +178,7 @@ SIGNAL(TIMER0_COMPA_vect)
 	if (i++ == 4)
 	{
 		i = 0;
-		PORTD ^= BIT(1);
+//		PORTD ^= BIT(1);
 	}
 }
 
@@ -466,23 +485,26 @@ void int_init(void)
 
 //config PD2...PD7 to pin change interrput
 //	PCICR |=(1<<PCIF2);
-	PCMSK2 =1<<PCINT20;//PCINT20
+//	PCMSK2 =1<<PCINT20;//PCINT20
 }
 
 
 SIGNAL(INT0_vect)
 {
-	if(PIND & BIT(2))
+//	PORTD ^= BIT(1);	
+	if(Configs.flag==0)
 	{
-		EICRA =(0<<ISC00)|(1<<ISC01);//level change mode
 		START_T1;
-		PORTD ^=BIT(1);
-	}
-	else if(TCCR1B!=0)
+		EICRA =(0<<ISC00)|(1<<ISC01);//level change mode
+		EIMSK = 1<<INT0;
+		Configs.flag++;
+		PORTD ^= BIT(1);		
+	}else
 	{
 		STOP_T1;
-		EIMSK =0;
-		Configs.flag=1;		
+		EIMSK = 0;
+		Configs.flag++;
+		PORTD ^= BIT(1);	
 	}
 }
 
@@ -490,14 +512,16 @@ SIGNAL(INT1_vect)
 {
 	if(PIND & BIT(3))
 	{
-		EICRA =(0<<ISC10)|(1<<ISC11);//level change mode
 		START_T1;
+		EICRA =(0<<ISC10)|(1<<ISC11);//level change mode
+		PORTD ^= BIT(1);
 	}
 	else if(TCCR1B!=0)
 	{
 		STOP_T1;
 		EIMSK =0;
 		Configs.flag=1;
+		PORTD ^= BIT(1);
 	}
 }
 
@@ -507,12 +531,14 @@ SIGNAL(PCINT2_vect)
 	if(PIND & BIT(4))
 	{	
 		START_T1;
+		PORTD ^= BIT(1);
 	}
 	else if(TCCR1B!=0)
 	{
 		STOP_T1;
 		PCICR=0;
 		Configs.flag=1;
+		PORTD ^= BIT(1);
 	}
 }
 
@@ -531,9 +557,9 @@ void init_devices(void)
 //initial the i2c interface address : 0x4a
 	TWI_Slave_Initialise(0x4a<<1);
 //pin change interrput
-	int_init();
+//	int_init();
 //adc 
-//	adc_init();
+	adc_init();
 
 	sei();//开全局中断
 }
@@ -547,22 +573,22 @@ long Read_phase(uchar p)
 	//set the intc
 	switch(p)
 	{
-		case 0:PCICR=0;EICRA =(1<<ISC00)|(1<<ISC01);EIMSK =1<<INT0;break;
-		case 1:PCICR=0;EICRA =(1<<ISC10)|(1<<ISC11);EIMSK =1<<INT1;break;
+		case 0:PCMSK2 =0;PCICR=0;EICRA =(1<<ISC00)|(1<<ISC01);EIFR = 1;EIMSK =1<<INT0;break;
+		case 1:PCMSK2 =0;PCICR=0;EICRA =(1<<ISC10)|(1<<ISC11);EIFR = 2;EIMSK =1<<INT1;break;
 		//PD4  PCINT20
-		case 2:EIMSK =0;PCICR =(1<<PCIE2);break;
+		case 2:EIMSK =0;PCMSK2 =1<<PCINT20;PCIFR = 1<<PCIF2;PCICR =(1<<PCIE2);break;
 	}
 	//wait the result
-	while(!Configs.flag && cnt++!=20) _delay_ms(100);//break out when time out 2s
+	while(Configs.flag!=2 && cnt++!=20) _delay_ms(100);//break out when time out 2s
 	STOP_T1;
 	Configs.phase[p] = Configs.ticks;
 	if(Configs.phase[p])
 		switch(p)
 		{
-			case 0:if(PORTD & BIT(5)) Configs.phase[p]|=(1<<31);break;
-			case 1:if(PORTD & BIT(6)) Configs.phase[p]|=(1<<31);break;
+			case 0:if(PIND & BIT(5)) Configs.phase[p]|=((long)1<<31);break;
+			case 1:if(PIND & BIT(6)) Configs.phase[p]|=((long)1<<31);break;
 			//PD4  PCINT20
-			case 2:if(PORTD & BIT(7)) Configs.phase[p]|=(1<<31);break;
+			case 2:if(PIND & BIT(7)) Configs.phase[p]|=((long)1<<31);break;
 		}	
 	//return the result
 	return Configs.phase[p];
@@ -577,10 +603,56 @@ void set_vol_base(int v)
 
 void test()
 {
+//	PCICR=0;EICRA =(1<<ISC00)|(0<<ISC01);EIMSK =1<<INT0;
+//EICRA =(1<<ISC10)|(0<<ISC11);EIFR = 2;EIMSK =1<<INT1;
+//PCMSK2 =1<<PCINT20;PCIFR = 1<<PCIF2;PCICR =(1<<PCIE2);
+
 //	EIMSK =0;PCICR =(1<<PCIE2);
+//START_T1;
+
+//set_vol_base(0x8000);
+
+unsigned int temp=adc_calc();
+ml.l = temp;
+TWI_buf[0] = ml.c.a1;
+TWI_buf[1] = ml.c.a2;
+TWI_buf[2] = ml.c.a3;
+TWI_buf[3] = ml.c.a4;
+PORTD|=BIT(0);
+_delay_ms(1000);
 }
 
 //主函数
+
+void calibration(uint v)
+{
+	uchar i;
+	double dt;
+	double v1;
+	i = 0;
+	dt = 0;
+	while(i++ != 10)
+	{
+		dt += adc_calc();
+		_delay_ms(1);
+	}
+	dt /=10;
+	v1 = dt;
+	dt /= 0.1526;
+	VREF = dt;
+	set_vol_base(0x8000+VREF);
+	i = 0;
+	dt = 0;
+	while(i++ != 10)
+	{
+		dt += adc_calc();
+		_delay_ms(1);
+	}
+	dt /=10;
+	if(dt > v1)
+		VREF = -VREF;		
+}
+
 int main(void)
 {
 	init_devices();
@@ -588,27 +660,30 @@ int main(void)
 	set_vol_base(0x8000);
 	//在这继续添加你的代码
 	//auto calibration	
-
+	calibration(0);
 	test();
 	while(1)
 	{
 //		if(PIND &BIT(2))
 //			PORTD |=BIT(1);
 //		else
-//			PORTD &=~BIT(1);			
-	
+//			PORTD &=~BIT(1);	
+		calibration(0);
+
+		test();
 		switch(Configs.fetch_no)
 		{
 			case 0:
 			case 1:
 			case 2:	Read_phase(Configs.fetch_no);
-					TWI_buf[0] = (uchar)((Configs.phase[Configs.fetch_no]&0xff000000)>>24);
-					TWI_buf[1] = (uchar)((Configs.phase[Configs.fetch_no]&0x00ff0000)>>16);
-					TWI_buf[2] = (uchar)((Configs.phase[Configs.fetch_no]&0x0000ff00)>>8);
-					TWI_buf[3] = (uchar)((Configs.phase[Configs.fetch_no]&0x000000ff));
+					ml.l = Configs.phase[Configs.fetch_no];
+					TWI_buf[0] = ml.c.a1;
+					TWI_buf[1] = ml.c.a2;
+					TWI_buf[2] = ml.c.a3;
+					TWI_buf[3] = ml.c.a4;
 					Configs.fetch_no = 0xff;PORTD|=BIT(0);break;			
 			case 3:	Configs.base_voltage = (TWI_buf[0]<<8)+TWI_buf[1];
-					set_vol_base(0x8000+Configs.base_voltage);
+					set_vol_base(0x8000+VREF+Configs.base_voltage);
 					Configs.fetch_no = 0xff;
 					break;//set voltage base
 			default:break;

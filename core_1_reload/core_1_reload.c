@@ -777,8 +777,8 @@ ISR(TWI_vect)
 		commandPC[4] =TWI_buf[2];
 		commandPC[5] =TWI_buf[3];
 		commandPC[6] =TWI_buf[4];
-		commandPC[11] = tail;
-		puts_0((unsigned char *) commandPC, 12); 		
+		commandPC[7] = tail;
+		puts_0((unsigned char *) commandPC, 8); 		
       break;      
     case TWI_ARB_LOST:          // Arbitration lost
       TWCR = (1<<TWEN)|                                 // TWI Interface enabled
@@ -1320,7 +1320,7 @@ SIGNAL( SIG_UART0_RECV)
 //外中断1服务程序
 //#pragma interrupt_handler int0_isr:2
 //void int0_isr(void)
-SIGNAL( SIG_INTERRUPT7 ) //自校自锁
+SIGNAL( SIG_INTERRUPT7 ) 
 {
 	//外中断7
 	unsigned char send[8];
