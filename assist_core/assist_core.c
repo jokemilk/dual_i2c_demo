@@ -178,7 +178,7 @@ SIGNAL(TIMER0_COMPA_vect)
 	if (i++ == 4)
 	{
 		i = 0;
-//		PORTD ^= BIT(1);
+		PORTD ^= BIT(1);
 	}
 }
 
@@ -498,13 +498,13 @@ SIGNAL(INT0_vect)
 		EICRA =(0<<ISC00)|(1<<ISC01);//level change mode
 		EIMSK = 1<<INT0;
 		Configs.flag++;
-		PORTD ^= BIT(1);		
+//		PORTD ^= BIT(1);		
 	}else
 	{
 		STOP_T1;
 		EIMSK = 0;
 		Configs.flag++;
-		PORTD ^= BIT(1);	
+//		PORTD ^= BIT(1);	
 	}
 }
 
@@ -514,14 +514,14 @@ SIGNAL(INT1_vect)
 	{
 		START_T1;
 		EICRA =(0<<ISC10)|(1<<ISC11);//level change mode
-		PORTD ^= BIT(1);
+//		PORTD ^= BIT(1);
 	}
 	else if(TCCR1B!=0)
 	{
 		STOP_T1;
 		EIMSK =0;
 		Configs.flag=1;
-		PORTD ^= BIT(1);
+//		PORTD ^= BIT(1);
 	}
 }
 
@@ -531,14 +531,14 @@ SIGNAL(PCINT2_vect)
 	if(PIND & BIT(4))
 	{	
 		START_T1;
-		PORTD ^= BIT(1);
+//		PORTD ^= BIT(1);
 	}
 	else if(TCCR1B!=0)
 	{
 		STOP_T1;
 		PCICR=0;
 		Configs.flag=1;
-		PORTD ^= BIT(1);
+//		PORTD ^= BIT(1);
 	}
 }
 
@@ -636,10 +636,10 @@ void calibration(uint v)
 		dt += adc_calc();
 		_delay_ms(1);
 	}
-	dt /=10;
+//	dt=0;
+	dt /=10.;
 	v1 = dt;
-	dt /= 0.1526;
-	VREF = dt;
+	VREF = (int)(dt*16.38);
 	set_vol_base(0x8000+VREF);
 	i = 0;
 	dt = 0;
@@ -650,7 +650,8 @@ void calibration(uint v)
 	}
 	dt /=10;
 	if(dt > v1)
-		VREF = -VREF;		
+		VREF = -VREF;	
+	set_vol_base(0x8000+VREF);
 }
 
 int main(void)
@@ -660,17 +661,19 @@ int main(void)
 	set_vol_base(0x8000);
 	//在这继续添加你的代码
 	//auto calibration	
+	_delay_ms(100);
 	calibration(0);
-	test();
+//	test();
 	while(1)
 	{
 //		if(PIND &BIT(2))
 //			PORTD |=BIT(1);
 //		else
 //			PORTD &=~BIT(1);	
-		calibration(0);
+//		calibration(0);
+//		set_vol_base(0x8000);
 
-		test();
+//		test();
 		switch(Configs.fetch_no)
 		{
 			case 0:
@@ -681,7 +684,7 @@ int main(void)
 					TWI_buf[1] = ml.c.a2;
 					TWI_buf[2] = ml.c.a3;
 					TWI_buf[3] = ml.c.a4;
-					Configs.fetch_no = 0xff;PORTD|=BIT(0);break;			
+					Configs.fetch_no = 0xff;PORTD&=~BIT(0);_delay_ms(1);PORTD|=BIT(0);break;			
 			case 3:	Configs.base_voltage = (TWI_buf[0]<<8)+TWI_buf[1];
 					set_vol_base(0x8000+VREF+Configs.base_voltage);
 					Configs.fetch_no = 0xff;

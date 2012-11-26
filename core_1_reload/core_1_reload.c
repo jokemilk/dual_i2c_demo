@@ -71,7 +71,6 @@ volatile static unsigned char core2_replay = 0; // 0 无定义	1 成功	2失败 3reques
 
 volatile unsigned char system_status = 0; //0	无状态	1 系统故障	2 系统正常运行中 3加载自校状态
 volatile static char intx_status = 0;
-volatile static char int1_status = 0;
 volatile static char AD_Protext = 0;
 volatile static int liangchen = 5;
 volatile static char flag_hl = 0; //恒流恒压配置状态标志位 0未配置，1配置过了
@@ -777,8 +776,8 @@ ISR(TWI_vect)
 		commandPC[4] =TWI_buf[2];
 		commandPC[5] =TWI_buf[3];
 		commandPC[6] =TWI_buf[4];
-		commandPC[7] = tail;
-		puts_0((unsigned char *) commandPC, 8); 		
+		commandPC[11] = tail;
+		puts_0((unsigned char *) commandPC, 12); 		
       break;      
     case TWI_ARB_LOST:          // Arbitration lost
       TWCR = (1<<TWEN)|                                 // TWI Interface enabled
@@ -875,47 +874,7 @@ int main()
 		{
 			intx_status = 0;
 		}
-		if (int1_status == 1) //自校状态
-		{
-			key = keyscan();
-			if (key == 3)
-			{
-				int1_status = 0;
-			}
-			if (key == 1)
-				Vref += 10, VrefAD_5 += 10;
-			else if (key == 2)
-				Vref -= 10, VrefAD_5 -= 10;
-			if ((key == 1) || (key == 2))
-			{
-				if (Vref >= 0)
-					command[5] = 0;
-				else
-					command[5] = 1;
-				command[0] = head;
-				command[1] = 9;
-				command[2] = ~command[1];
-				command[3] = 6;
-				command[4] = ~command[3];
-				if (Vref >= 0)
-				{
-					command[6] = ((Vref >> 8) & 0xFF);
-					command[7] = Vref & 0xFF;
-				}
-				else
-				{
-					command[6] = (((-Vref) >> 8) & 0xFF);
-					command[7] = (-Vref) & 0xFF;
-				}
-				command[8] = tail;
-				puts_1((unsigned char *) command, 9);
-#ifdef _PART_EEPROM_
-				flashwrite(5);
-#endif
-
-			}
-		}
-		else if (system_status == 2) //加载/卸载按钮 开led加载
+		if (system_status == 2) //加载/卸载按钮 开led加载
 		{
 			key = keyscan();
 			if (key == 4)
@@ -1204,7 +1163,9 @@ SIGNAL( SIG_UART0_RECV)
 			tTime += commandPC[15];
 			tTime *= 256;
 			tTime += commandPC[16];
-
+			OCR1A = 24000 - 1; //24000->100ms
+			btimer = 0;
+/*
 			if (tTime < 100)
 			{
 				OCR1A = 2400 - 1; //24000->100ms
@@ -1215,6 +1176,7 @@ SIGNAL( SIG_UART0_RECV)
 				OCR1A = 24000 - 1; //24000->100ms
 				btimer = 0;
 			}
+*/
 			//set voltage base for assist core			
 			Set_Voltage_base(commandPC[8],commandPC[9],commandPC[10]);
 			break;
@@ -1306,6 +1268,18 @@ SIGNAL( SIG_UART0_RECV)
 		{
 			Get_Phase(command[5]);
 			break;			
+		}
+		case 10:
+		{						
+			OCR1A  = 2400-1; //24000->100ms						
+			btimer = 1;										
+			command[0] = head;						
+			command[11] = tail;						
+			command[1] = 10;						
+			command[2] = ~command[1];						
+			command[3] = 8;						
+			puts_0((unsigned char *)command,12);						
+			break;					  
 		}
 		default:
 			break;
